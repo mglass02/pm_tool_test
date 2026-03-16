@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Invisible Project Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  </head>
+  <body class="bg-slate-950 text-slate-100 min-h-screen">
+    <div class="max-w-6xl mx-auto px-6 py-10">
+      <header class="mb-8">
+        <h1 class="text-3xl font-semibold tracking-tight">Invisible Project Management</h1>
+        <p class="text-slate-400 mt-2">Issues move automatically based on GitHub activity.</p>
+      </header>
+
+      <main class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <section class="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
+          <h2 class="text-lg font-semibold mb-3">To Do</h2>
+          <ul id="todo" class="space-y-3"></ul>
+        </section>
+        <section class="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
+          <h2 class="text-lg font-semibold mb-3">In Progress</h2>
+          <ul id="inProgress" class="space-y-3"></ul>
+        </section>
+        <section class="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
+          <h2 class="text-lg font-semibold mb-3">Done</h2>
+          <ul id="done" class="space-y-3"></ul>
+        </section>
+      </main>
+    </div>
+
+    <template id="card">
+      <li class="bg-slate-800/70 border border-slate-700 rounded-lg p-3">
+        <div class="text-sm text-slate-400" data-id></div>
+        <a class="text-base font-medium hover:underline" target="_blank" rel="noreferrer" data-title></a>
+      </li>
+    </template>
+
+    <script>
+      const socket = io();
+      const columns = {
+        todo: document.getElementById('todo'),
+        inProgress: document.getElementById('inProgress'),
+        done: document.getElementById('done'),
+      };
+
+      function renderColumn(el, items) {
+        el.innerHTML = '';
+        const tpl = document.getElementById('card');
+        items.forEach((item) => {
+          const node = tpl.content.cloneNode(true);
+          node.querySelector('[data-id]').textContent = `#${item.number}`;
+          const title = node.querySelector('[data-title]');
+          title.textContent = item.title;
+          if (item.url) title.href = item.url;
+          el.appendChild(node);
+        });
+      }
+
+      socket.on('state', (state) => {
+        renderColumn(columns.todo, state.todo || []);
+        renderColumn(columns.inProgress, state.inProgress || []);
+        renderColumn(columns.done, state.done || []);
+      });
+    </script>
+  </body>
+</html>
