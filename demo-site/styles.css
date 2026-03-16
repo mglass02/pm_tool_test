@@ -60,6 +60,22 @@ body {
   flex-wrap: wrap;
 }
 
+.pill-row {
+  margin-top: 22px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pill-row span {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
 button {
   border: none;
   padding: 12px 22px;
@@ -84,6 +100,13 @@ button {
   display: grid;
   gap: 20px;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.value-list {
+  margin-top: 20px;
+  padding-left: 20px;
+  color: var(--muted);
+  line-height: 1.6;
 }
 
 .cta-card {
