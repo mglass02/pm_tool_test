@@ -32,7 +32,14 @@
           <ul id="inProgress" class="space-y-3"></ul>
         </section>
         <section class="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
-          <h2 class="text-lg font-semibold mb-3">Done</h2>
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <h2 class="text-lg font-semibold">Done</h2>
+            <div class="flex gap-2 text-xs">
+              <button id="doneToday" class="px-2 py-1 rounded-md bg-slate-800 text-slate-100">Today</button>
+              <button id="doneWeek" class="px-2 py-1 rounded-md bg-slate-900 text-slate-400">This Week</button>
+              <button id="doneArchived" class="px-2 py-1 rounded-md bg-slate-900 text-slate-400">Archived</button>
+            </div>
+          </div>
           <ul id="done" class="space-y-3"></ul>
         </section>
       </main>
@@ -72,8 +79,12 @@
       const portfolioViewBtn = document.getElementById('portfolioViewBtn');
       const portfolioStats = document.getElementById('portfolioStats');
       const portfolioProjects = document.getElementById('portfolioProjects');
+      const doneTodayBtn = document.getElementById('doneToday');
+      const doneWeekBtn = document.getElementById('doneWeek');
+      const doneArchivedBtn = document.getElementById('doneArchived');
 
       let currentView = 'project';
+      let doneFilter = 'today';
 
       function formatDuration(start, end) {
         if (!start) return '—';
@@ -111,6 +122,49 @@
 
       projectViewBtn.addEventListener('click', () => setView('project'));
       portfolioViewBtn.addEventListener('click', () => setView('portfolio'));
+      doneTodayBtn.addEventListener('click', () => setDoneFilter('today'));
+      doneWeekBtn.addEventListener('click', () => setDoneFilter('week'));
+      doneArchivedBtn.addEventListener('click', () => setDoneFilter('archived'));
+
+      function setDoneFilter(filter) {
+        doneFilter = filter;
+        const active = 'bg-slate-800';
+        const inactive = 'bg-slate-900';
+        const activeText = 'text-slate-100';
+        const inactiveText = 'text-slate-400';
+        const buttons = [
+          { id: 'today', el: doneTodayBtn },
+          { id: 'week', el: doneWeekBtn },
+          { id: 'archived', el: doneArchivedBtn },
+        ];
+        buttons.forEach((btn) => {
+          if (btn.id === filter) {
+            btn.el.classList.replace(inactive, active);
+            btn.el.classList.replace(inactiveText, activeText);
+          } else {
+            btn.el.classList.replace(active, inactive);
+            btn.el.classList.replace(activeText, inactiveText);
+          }
+        });
+      }
+
+      function startOfDay(date) {
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      }
+
+      function startOfWeek(date) {
+        const day = date.getDay();
+        const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+        return startOfDay(new Date(date.getFullYear(), date.getMonth(), diff));
+      }
+
+      function isSameDay(dateA, dateB) {
+        return (
+          dateA.getFullYear() === dateB.getFullYear() &&
+          dateA.getMonth() === dateB.getMonth() &&
+          dateA.getDate() === dateB.getDate()
+        );
+      }
 
       function renderColumn(el, items) {
         el.innerHTML = '';
@@ -143,7 +197,17 @@
         const mapOrder = (list) => list.map((num) => issues[num]).filter(Boolean);
         renderColumn(columns.todo, mapOrder(order.todo));
         renderColumn(columns.inProgress, mapOrder(order.inProgress));
-        renderColumn(columns.done, mapOrder(order.done));
+        const doneItems = mapOrder(order.done);
+        const now = new Date();
+        const weekStart = startOfWeek(now);
+        const filteredDone = doneItems.filter((item) => {
+          const mergedAt = item.mergedAt ? new Date(item.mergedAt) : null;
+          if (!mergedAt) return false;
+          if (doneFilter === 'today') return isSameDay(mergedAt, now);
+          if (doneFilter === 'week') return mergedAt >= weekStart;
+          return mergedAt < weekStart;
+        });
+        renderColumn(columns.done, filteredDone);
 
         const allIssues = Object.values(issues);
         const doneIssues = allIssues.filter((i) => i.status === 'done' && i.startedAt && i.mergedAt);
