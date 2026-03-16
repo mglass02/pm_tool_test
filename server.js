@@ -55,7 +55,7 @@ function normalizeIssue(issue) {
     status: 'todo',
     branch: null,
     pr: null,
-    startedAt: null,
+    startedAt: issue.created_at || new Date().toISOString(),
     mergedAt: null,
     createdAt: issue.created_at || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -104,11 +104,14 @@ function moveIssue(project, number, target, patch = {}) {
         status: target,
         branch: null,
         pr: null,
-        startedAt: null,
+        startedAt: patch.startedAt || new Date().toISOString(),
         mergedAt: null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
+  if (!issue.startedAt) {
+    issue.startedAt = patch.startedAt || issue.createdAt || new Date().toISOString();
+  }
   issue.status = target;
   issue.updatedAt = new Date().toISOString();
   upsertIssue(project, issue);
