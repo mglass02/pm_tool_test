@@ -130,7 +130,9 @@
         });
       }
 
-      socket.on('state', (state) => {
+      let latestState = null;
+
+      function renderState(state) {
         const projects = state.projects || {};
         const projectNames = Object.keys(projects);
         const activeProject = projectNames[0];
@@ -184,7 +186,17 @@
             <div class=\"text-sm text-slate-400\">To Do: ${counts.todo} • In Progress: ${counts.inProgress} • Done: ${counts.done}</div>`;
           portfolioProjects.appendChild(row);
         });
+      }
+
+      socket.on('state', (state) => {
+        latestState = state;
+        renderState(state);
       });
+
+      // Refresh timers every second without requiring new server events
+      setInterval(() => {
+        if (latestState) renderState(latestState);
+      }, 1000);
     </script>
   </body>
 </html>
