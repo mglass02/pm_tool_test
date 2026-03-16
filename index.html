@@ -125,7 +125,8 @@
             ? `Assignee: ${item.assignee}`
             : 'Assignee: —';
           const timeLabel = item.status === 'done' ? 'Time spent' : 'Time so far';
-          node.querySelector('[data-time]').textContent = `${timeLabel}: ${formatDuration(item.startedAt, item.mergedAt)}`;
+          const startTime = item.startedAt || item.createdAt;
+          node.querySelector('[data-time]').textContent = `${timeLabel}: ${formatDuration(startTime, item.mergedAt)}`;
           el.appendChild(node);
         });
       }
