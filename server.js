@@ -16,7 +16,7 @@ const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
 const STATE_FILE = path.join(__dirname, 'state.json');
 
 // In-memory state with optional persistence
-// Shape: { projects: { [projectId]: { id, repo, name, issues: { [number]: issue }, order: { todo: [], inProgress: [], done: [] } } } }
+// Shape: { projects: { [repoFullName]: { repo, issues: { [number]: issue }, order: { todo: [], inProgress: [], done: [] } } } }
 let state = { projects: {} };
 
 function loadState() {
@@ -42,17 +42,7 @@ function cleanTitle(title) {
   return title.replace(/^\s*\[[^\]]+\]\s*/u, '').trim();
 }
 
-function getProjectNameFromTitle(title) {
-  const match = title.match(/^\s*\[([^\]]+)\]\s*/u);
-  return match ? match[1].trim() : 'General';
-}
-
-function getProjectNameFromBranch(branch) {
-  const match = branch.match(/^([a-z0-9-]+)\//i);
-  return match ? match[1] : 'General';
-}
-
-function normalizeIssue(issue, projectName) {
+function normalizeIssue(issue) {
   const summary = issue.body ? issue.body.split('\n')[0].slice(0, 140) : '';
   return {
     id: issue.id,
@@ -69,26 +59,18 @@ function normalizeIssue(issue, projectName) {
     mergedAt: null,
     createdAt: issue.created_at || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    projectName,
   };
 }
 
-function getProjectId(repoFullName, projectName) {
-  return `${repoFullName}::${projectName}`;
-}
-
-function getProject(repoFullName, projectName) {
-  const id = getProjectId(repoFullName, projectName);
-  if (!state.projects[id]) {
-    state.projects[id] = {
-      id,
+function getProject(repoFullName) {
+  if (!state.projects[repoFullName]) {
+    state.projects[repoFullName] = {
       repo: repoFullName,
-      name: projectName,
       issues: {},
       order: { todo: [], inProgress: [], done: [] },
     };
   }
-  return state.projects[id];
+  return state.projects[repoFullName];
 }
 
 function removeFromOrders(project, number) {
@@ -201,9 +183,8 @@ app.post('/webhook', (req, res) => {
 
   if (event === 'issues') {
     if (payload.action === 'opened' && payload.issue) {
-      const projectName = getProjectNameFromTitle(payload.issue.title || 'General');
-      const project = getProject(repoFullName, projectName);
-      const issue = normalizeIssue(payload.issue, projectName);
+      const project = getProject(repoFullName);
+      const issue = normalizeIssue(payload.issue);
       upsertIssue(project, issue);
       placeInOrder(project, 'todo', issue.number);
       saveState();
@@ -217,8 +198,7 @@ app.post('/webhook', (req, res) => {
       const match = payload.ref.match(/\b(\d+)\b/);
       if (match) {
         const issueNumber = Number(match[1]);
-        const projectName = getProjectNameFromBranch(payload.ref);
-        const project = getProject(repoFullName, projectName);
+        const project = getProject(repoFullName);
         const existing = project.issues[issueNumber];
         const startedAt = new Date().toISOString();
         if (existing) {
@@ -226,7 +206,7 @@ app.post('/webhook', (req, res) => {
         } else {
           fetchIssueDetails(repoFullName, issueNumber).then((issue) => {
             if (issue) {
-              const normalized = normalizeIssue(issue, projectName);
+              const normalized = normalizeIssue(issue);
               moveIssue(project, issueNumber, 'inProgress', {
                 ...normalized,
                 branch: payload.ref,
@@ -236,7 +216,6 @@ app.post('/webhook', (req, res) => {
               moveIssue(project, issueNumber, 'inProgress', {
                 branch: payload.ref,
                 startedAt,
-                projectName,
               });
             }
           });
@@ -256,8 +235,7 @@ app.post('/webhook', (req, res) => {
       if (match) {
         const issueNumber = Number(match[1]);
         const mergedAt = pr.merged_at || new Date().toISOString();
-        const projectName = pr.head && pr.head.ref ? getProjectNameFromBranch(pr.head.ref) : 'General';
-        const project = getProject(repoFullName, projectName);
+        const project = getProject(repoFullName);
         moveIssue(project, issueNumber, 'done', {
           pr: pr.html_url || null,
           mergedAt,

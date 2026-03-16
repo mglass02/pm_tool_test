@@ -19,10 +19,7 @@
           <button id="projectViewBtn" class="px-4 py-2 rounded-lg bg-slate-800 text-slate-100">Project View</button>
           <button id="portfolioViewBtn" class="px-4 py-2 rounded-lg bg-slate-900 text-slate-400">Portfolio View</button>
         </div>
-        <div class="flex items-center gap-3 text-sm text-slate-400">
-          <label for="projectSelect">Project</label>
-          <select id="projectSelect" class="bg-slate-900 border border-slate-800 rounded-md px-2 py-1 text-slate-100"></select>
-        </div>
+        <div class="text-sm text-slate-400" id="projectLabel">Project: —</div>
       </div>
 
       <main id="projectView" class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -68,7 +65,7 @@
         inProgress: document.getElementById('inProgress'),
         done: document.getElementById('done'),
       };
-      const projectSelect = document.getElementById('projectSelect');
+      const projectLabel = document.getElementById('projectLabel');
       const projectView = document.getElementById('projectView');
       const portfolioView = document.getElementById('portfolioView');
       const projectViewBtn = document.getElementById('projectViewBtn');
@@ -77,7 +74,6 @@
       const portfolioProjects = document.getElementById('portfolioProjects');
 
       let currentView = 'project';
-      let currentProjectId = null;
 
       function formatDuration(start, end) {
         if (!start) return '—';
@@ -113,9 +109,6 @@
 
       projectViewBtn.addEventListener('click', () => setView('project'));
       portfolioViewBtn.addEventListener('click', () => setView('portfolio'));
-      projectSelect.addEventListener('change', (e) => {
-        currentProjectId = e.target.value || null;
-      });
 
       function renderColumn(el, items) {
         el.innerHTML = '';
@@ -135,27 +128,13 @@
         });
       }
 
-      function renderProjectOptions(projects, activeId) {
-        const entries = Object.values(projects);
-        projectSelect.innerHTML = '';
-        entries.forEach((project) => {
-          const option = document.createElement('option');
-          option.value = project.id;
-          option.textContent = `${project.name} (${project.repo})`;
-          if (project.id === activeId) option.selected = true;
-          projectSelect.appendChild(option);
-        });
-      }
-
       socket.on('state', (state) => {
         const projects = state.projects || {};
-        const projectIds = Object.keys(projects);
-        if (projectIds.length === 0) return;
-        if (!currentProjectId || !projects[currentProjectId]) {
-          currentProjectId = projectIds[0];
-        }
-        renderProjectOptions(projects, currentProjectId);
-        const project = projects[currentProjectId];
+        const projectNames = Object.keys(projects);
+        const activeProject = projectNames[0];
+        if (!activeProject) return;
+        projectLabel.textContent = `Project: ${activeProject}`;
+        const project = projects[activeProject];
         const issues = project.issues || {};
         const order = project.order || { todo: [], inProgress: [], done: [] };
 
@@ -177,7 +156,7 @@
           0
         );
         const stats = [
-          { label: 'Projects', value: projectIds.length },
+          { label: 'Projects', value: projectNames.length },
           { label: 'Open Issues', value: totalOpen },
           { label: 'Avg Cycle Time (hrs)', value: avgCycleHours },
         ];
@@ -189,8 +168,8 @@
         });
 
         portfolioProjects.innerHTML = '';
-        projectIds.forEach((id) => {
-          const p = projects[id];
+        projectNames.forEach((name) => {
+          const p = projects[name];
           const issueList = Object.values(p.issues || {});
           const counts = {
             todo: issueList.filter((i) => i.status === 'todo').length,
@@ -199,7 +178,7 @@
           };
           const row = document.createElement('div');
           row.className = 'flex flex-wrap items-center justify-between gap-3 border border-slate-800 rounded-lg p-3 bg-slate-950/40';
-          row.innerHTML = `<div class=\"font-medium\">${p.name} <span class=\"text-slate-500 text-sm\">(${p.repo})</span></div>
+          row.innerHTML = `<div class=\"font-medium\">${name}</div>
             <div class=\"text-sm text-slate-400\">To Do: ${counts.todo} • In Progress: ${counts.inProgress} • Done: ${counts.done}</div>`;
           portfolioProjects.appendChild(row);
         });
