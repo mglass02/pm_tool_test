@@ -3,6 +3,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execSync } = require('child_process');
+const { Select } = require('enquirer');
 
 const HOME = os.homedir();
 const CONFIG_DIR = path.join(HOME, '.pmtool');
@@ -85,6 +86,12 @@ function formatDuration(ms) {
   const mm = String(minutes).padStart(2, '0');
   const ss = String(seconds).padStart(2, '0');
   return `${hh}:${mm}:${ss}`;
+}
+
+function pad(text, width) {
+  const str = String(text);
+  if (str.length >= width) return str.slice(0, width - 1) + '…';
+  return str + ' '.repeat(width - str.length);
 }
 
 async function sync() {
@@ -176,6 +183,20 @@ async function sync() {
   return state;
 }
 
+function formatTimeStamp(iso) {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
+function isWithinDays(iso, days) {
+  if (!iso) return false;
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  return new Date(iso).getTime() >= cutoff;
+}
+
 function printBoard(state) {
   const { todo, inProgress, done } = state.columns;
 
@@ -196,6 +217,122 @@ function printBoard(state) {
   printColumn('To Do', todo);
   printColumn('In Progress', inProgress);
   printColumn('Done', done);
+}
+
+function printBoardLimited(state, limit) {
+  const { todo, inProgress, done } = state.columns;
+  const l = Number.isFinite(limit) ? limit : 5;
+  const trim = (items) => items.slice(0, l);
+  console.log(`Repo: ${state.repo}`);
+  console.log(`Last sync: ${state.syncedAt}`);
+  printBoard({
+    ...state,
+    columns: {
+      todo: trim(todo),
+      inProgress: trim(inProgress),
+      done: trim(done),
+    },
+  });
+}
+
+function printFocus(state) {
+  const { todo, inProgress } = state.columns;
+  const now = Date.now();
+  const byOldest = (a, b) => new Date(a.createdAt) - new Date(b.createdAt);
+  const oldestInProgress = [...inProgress].sort(byOldest);
+  const oldestTodo = [...todo].sort(byOldest);
+
+  console.log(`Repo: ${state.repo}`);
+  console.log(`Last sync: ${state.syncedAt}`);
+  console.log('');
+  console.log('FOCUS');
+  console.log('-----');
+
+  if (oldestInProgress.length) {
+    console.log('In Progress (oldest first)');
+    oldestInProgress.slice(0, 3).forEach((item) => {
+      const age = formatDuration(now - new Date(item.startedAt).getTime());
+      console.log(`#${item.number} ${item.title}  |  time so far: ${age}`);
+    });
+  } else {
+    console.log('No active work in progress.');
+  }
+
+  console.log('');
+  console.log('Next Up (oldest To Do)');
+  oldestTodo.slice(0, 3).forEach((item) => {
+    const age = formatDuration(now - new Date(item.createdAt).getTime());
+    console.log(`#${item.number} ${item.title}  |  age: ${age}`);
+  });
+}
+
+function printNext(state) {
+  const { todo, inProgress } = state.columns;
+  const byOldest = (a, b) => new Date(a.createdAt) - new Date(b.createdAt);
+  if (inProgress.length) {
+    const pick = [...inProgress].sort(byOldest)[0];
+    console.log(`Keep going: #${pick.number} ${pick.title}`);
+    return;
+  }
+  if (todo.length) {
+    const pick = [...todo].sort(byOldest)[0];
+    console.log(`Next task: #${pick.number} ${pick.title}`);
+    return;
+  }
+  console.log('No tasks found.');
+}
+
+async function tasksView(state, options = {}) {
+  const { todo, inProgress, done } = state.columns;
+  const limit = Number.isFinite(options.limit) ? options.limit : null;
+  const done7d = done.filter((i) => isWithinDays(i.mergedAt, 7));
+  const durations = done
+    .map((i) => new Date(i.mergedAt) - new Date(i.startedAt))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  const avg = durations.length ? formatDuration(durations.reduce((a, b) => a + b, 0) / durations.length) : '—';
+
+  console.log(`Repo: ${state.repo}`);
+  console.log(`Sync: ${formatTimeStamp(state.syncedAt)}`);
+  console.log(
+    `To Do: ${todo.length}  |  In Progress: ${inProgress.length}  |  Done (7d): ${done7d.length}  |  Avg Time Taken (HH:MM:SS): ${avg}`
+  );
+  console.log('Time taken format: HH:MM:SS');
+  console.log('');
+
+  while (true) {
+    const prompt = new Select({
+      name: 'column',
+      message: 'Select a column to view',
+      choices: ['To Do', 'In Progress', 'Done (7d)', 'Done (all)', 'Exit'],
+    });
+
+    const choice = await prompt.run();
+    if (choice === 'Exit') break;
+
+    let items = [];
+    if (choice === 'To Do') items = todo;
+    if (choice === 'In Progress') items = inProgress;
+    if (choice === 'Done (7d)') items = done7d;
+    if (choice === 'Done (all)') items = done;
+    if (limit) items = items.slice(0, limit);
+
+    console.log(`\n${choice}`);
+    console.log('-'.repeat(choice.length));
+    console.log(`${pad('ID', 6)} ${pad('Title', 52)} ${pad('Time Taken (HH:MM:SS)', 22)}`);
+    console.log(`${'-'.repeat(6)} ${'-'.repeat(52)} ${'-'.repeat(22)}`);
+    if (!items.length) {
+      console.log('(none)\n');
+      continue;
+    }
+    items.forEach((item) => {
+      const time = item.mergedAt
+        ? formatDuration(new Date(item.mergedAt) - new Date(item.startedAt))
+        : '';
+      const timeDisplay = time || '—';
+      console.log(`${pad(`#${item.number}`, 6)} ${pad(item.title, 52)} ${pad(timeDisplay, 22)}`);
+    });
+    console.log('');
+  }
 }
 
 function printAvg(state) {
@@ -235,7 +372,7 @@ function printCurrent(state) {
 }
 
 async function main() {
-  const cmd = process.argv[2] || 'board';
+  const cmd = process.argv[2] || 'tasks-view';
   ensureDir();
 
   if (cmd === 'init') {
@@ -255,12 +392,40 @@ async function main() {
     return;
   }
 
-  const state = fs.existsSync(STATE_FILE) ? readJson(STATE_FILE, null) : await sync();
-
-  if (cmd === 'board') {
-    printBoard(state);
+  if (cmd === 'help') {
+    console.log('PM Tool CLI');
+    console.log('-----------');
+    console.log('Commands:');
+    console.log('  pm init           Initialize repo context from git remote');
+    console.log('  pm sync           Sync issues, branches, and PRs from GitHub');
+    console.log('  pm tasks-view     Interactive view with column selection');
+    console.log('                   --limit N   Limit items shown per column');
+    console.log('  pm focus          Show oldest in-progress and next tasks');
+    console.log('  pm next           Recommend the single next task');
+    console.log('  pm avg            Average time taken for completed tasks');
+    console.log('  pm current        Show time spent on current branch');
+    console.log('  pm doctor         Check GitHub auth, repo, and connectivity');
+    console.log('  pm help           Show this help');
     return;
   }
+
+  if (cmd === 'doctor') {
+    const repo = readJson(CONFIG_FILE, {}).repo || getRepoFromGit();
+    const token = getToken();
+    console.log('PM Tool Doctor');
+    console.log('--------------');
+    console.log(`Repo detected: ${repo || 'not found'}`);
+    console.log(`GitHub token: ${token ? 'present' : 'missing'}`);
+    try {
+      await ghFetch('https://api.github.com/user');
+      console.log('GitHub API: reachable');
+    } catch (err) {
+      console.log(`GitHub API: error (${err.message})`);
+    }
+    return;
+  }
+
+  const state = fs.existsSync(STATE_FILE) ? readJson(STATE_FILE, null) : await sync();
 
   if (cmd === 'avg') {
     printAvg(state);
@@ -272,7 +437,24 @@ async function main() {
     return;
   }
 
-  console.log('Usage: pm init | pm sync | pm board | pm avg | pm current');
+  if (cmd === 'tasks-view') {
+    const limitIdx = process.argv.indexOf('--limit');
+    const limit = limitIdx !== -1 && process.argv[limitIdx + 1] ? Number(process.argv[limitIdx + 1]) : null;
+    await tasksView(state, { limit });
+    return;
+  }
+
+  if (cmd === 'focus') {
+    printFocus(state);
+    return;
+  }
+
+  if (cmd === 'next') {
+    printNext(state);
+    return;
+  }
+
+  console.log('Usage: pm init | pm sync | pm tasks-view [--limit N] | pm avg | pm current | pm focus | pm next | pm doctor | pm help');
 }
 
 main().catch((err) => {

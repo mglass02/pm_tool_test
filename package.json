@@ -1,8 +1,19 @@
 {
-  "name": "pm_tool",
+  "name": "pm-tool",
   "version": "1.0.0",
-  "description": "",
-  "main": "server.js",
+  "description": "CLI-only project management that syncs with GitHub activity.",
+  "main": "pm-cli.js",
+  "keywords": [
+    "cli",
+    "github",
+    "productivity",
+    "project-management"
+  ],
+  "homepage": "https://github.com/mglass02/pm_tool_test",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mglass02/pm_tool_test.git"
+  },
   "bin": {
     "pm": "pm-cli.js"
   },
@@ -16,6 +27,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "enquirer": "^2.4.1",
     "express": "^5.2.1",
     "socket.io": "^4.8.3"
   },
